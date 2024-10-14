@@ -68,6 +68,18 @@ class MultiClassFocalLossWithAlpha(nn.Module):
 
 # from transformers import LlamaForCausalLM,LlamaConfig
 # config = LlamaConfig.from_pretrained("/home/disk2/ghh/llama/config.json")
+#
+ cvae_model = torch.load("model/graph.pkl")  # 加载预训练的 特征增强模型
+
+def get_augmented_features(batch_size, latent_size, original_features):
+    """生成增强特征并与原始特征拼接。"""
+    augmented_features = []
+    for _ in range(batch_size):
+        z = torch.randn([original_features.size(0), latent_size]).to(original_features.device)
+        augmented_feature = cvae_model.inference(z, original_features).detach()
+        augmented_features.append(augmented_feature)
+    return torch.stack(augmented_features)  # 返回形状为 [batch, num_nodes, latent_size]
+
 
 class ONE_ATTENTION_with_bert(torch.nn.Module):
     def __init__(self, nfeat, nclass, evi_max_num) -> None:
@@ -92,6 +104,15 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         segment_ids = segment_ids.view(-1,input_ids.shape[-1])
         _, pooled_output = self.bert(input_ids, token_type_ids=segment_ids, \
                                      attention_mask=input_mask, output_all_encoded_layers=False,)
+	# add feature
+	augmented_features = get_augmented_features(
+        batch_size=pooled_output.size(0), 
+        latent_size=pooled_output.size(-1), 
+        original_features=pooled_output
+    	)
+	# 特征增强
+	# pooled_output = torch.cat([pooled_output, augmented_features], dim=-1)  # [batch, 6, 768+latent_size]
+
         pooled_output = pooled_output.view(-1,1+self.evi_max_num,pooled_output.shape[-1]) # [batch,6,768]
         datas = []
         for i in range(len(pooled_output)):
@@ -196,6 +217,8 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
 #         graph_rep = self.cal_graph_representation(data)
 #         outputs = self.classifier(graph_rep)
 #         return outputs
+
+
 
 class Walk_with_bert(nn.Module):
     def __init__(self, nfeat, nclass, max_length, beam_size, max_evi_num, causal_method=None):
