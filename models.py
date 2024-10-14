@@ -71,14 +71,16 @@ class MultiClassFocalLossWithAlpha(nn.Module):
 #
  cvae_model = torch.load("model/graph.pkl")  # 加载预训练的 特征增强模型
 
-def get_augmented_features(batch_size, latent_size, original_features):
-    """生成增强特征并与原始特征拼接。"""
-    augmented_features = []
-    for _ in range(batch_size):
-        z = torch.randn([original_features.size(0), latent_size]).to(original_features.device)
-        augmented_feature = cvae_model.inference(z, original_features).detach()
-        augmented_features.append(augmented_feature)
-    return torch.stack(augmented_features)  # 返回形状为 [batch, num_nodes, latent_size]
+def get_augmented_features(original_features):
+    """生成增强特征，并与原始特征合并（保持相同维度）。"""
+    # 生成潜在向量 z
+    z = torch.randn([original_features.size(0), cvae_model.latent_size]).to(original_features.device)
+    # 使用 CVAE 生成增强特征
+    augmented_features = cvae_model.inference(z, original_features).detach()
+    # 合并增强特征与原始特征（逐元素求平均）
+    merged_features = (original_features + augmented_features) / 2
+    return merged_features  # 返回与原始特征相同维度的张量
+
 
 
 class ONE_ATTENTION_with_bert(torch.nn.Module):
@@ -110,10 +112,12 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         latent_size=pooled_output.size(-1), 
         original_features=pooled_output
     	)
-	# 特征增强
-	# pooled_output = torch.cat([pooled_output, augmented_features], dim=-1)  # [batch, 6, 768+latent_size]
-
+	
         pooled_output = pooled_output.view(-1,1+self.evi_max_num,pooled_output.shape[-1]) # [batch,6,768]
+
+	    # 合并原始特征与增强特征（保持维度不变）
+    	 pooled_output = get_augmented_features(pooled_output)	
+
         datas = []
         for i in range(len(pooled_output)):
             x = pooled_output[i] # [6,768]
