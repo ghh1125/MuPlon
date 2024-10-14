@@ -116,7 +116,7 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         pooled_output = pooled_output.view(-1,1+self.evi_max_num,pooled_output.shape[-1]) # [batch,6,768]
 
 	    # 合并原始特征与增强特征（保持维度不变）
-    	 pooled_output = get_augmented_features(pooled_output)	
+    	 # pooled_output = get_augmented_features(pooled_output)	
 
         datas = []
         for i in range(len(pooled_output)):
