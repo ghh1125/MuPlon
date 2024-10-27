@@ -6,6 +6,7 @@ You should organize them in the following format.
 MuPlon
     ├── data
     ├── pretrained_models
+    ├── path
     ├── data_load_utils.py
     ├── models.py
     ├── fever.py.py
