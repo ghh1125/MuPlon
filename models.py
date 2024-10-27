@@ -224,7 +224,7 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
 #         outputs = self.classifier(graph_rep)
 #         return outputs
 
-
+import os
 
 class Walk_with_bert(nn.Module):
     def __init__(self, nfeat, nclass, max_length, beam_size, max_evi_num, causal_method=None):
@@ -242,6 +242,9 @@ class Walk_with_bert(nn.Module):
             Linear(nfeat, 1),
             ELU(),
         )
+
+        self.output_dir = "path"
+        os.makedirs(self.output_dir, exist_ok=True)
         """实例化时生成唯一的时间戳 CSV 文件名"""
         self.csv_file = self.get_timestamped_filename()
 
@@ -581,9 +584,9 @@ class Walk_with_bert(nn.Module):
         return probability # [batch,6,6]
 
     def get_timestamped_filename(self, prefix="beam_paths", extension=".csv"):
-        """生成带时间戳的文件名"""
+        """生成带时间戳的文件名，保存到指定目录"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"{prefix}_{timestamp}{extension}"
+        return os.path.join(self.output_dir, f"{prefix}_{timestamp}{extension}")
 
     def save_paths_to_csv(self, epoch, step, paths):
         """将路径保存到 CSV 文件中"""
