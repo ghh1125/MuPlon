@@ -4,10 +4,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import BatchNorm1d, Linear, ReLU, ELU, LeakyReLU, Sigmoid
 import random
+from datetime import datetime
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn import global_mean_pool, global_add_pool
 import heapq
+import csv
 from tqdm import tqdm
 from sklearn.cluster import KMeans
 from torch.nn.functional import cosine_similarity
@@ -240,6 +242,13 @@ class Walk_with_bert(nn.Module):
             Linear(nfeat, 1),
             ELU(),
         )
+        """实例化时生成唯一的时间戳 CSV 文件名"""
+        self.csv_file = self.get_timestamped_filename()
+
+        # 初始化 CSV 文件，写入表头
+        with open(self.csv_file, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Epoch", "Step", "Path"])  # 写入表头
 
         self.attention = SelfAttention(nfeat*2)
 
@@ -570,22 +579,40 @@ class Walk_with_bert(nn.Module):
         probability = probability / row_sums
 
         return probability # [batch,6,6]
-    
-    # 一个样本寻找路径
-    def find_path(self, start_node, probability, max_length, beam_size): # 0 [6,6] 4 5
-        top_beam_paths = [[start_node]] # 概率最高的beam_size个路径
-        top_beam_logits = [torch.tensor(0.0).to(probability.device)] # 每条路径的概率 [5]
-        top_beam_end = [0] # 这个列表表示对应路径是否已经终止搜索
+
+    def get_timestamped_filename(self, prefix="beam_paths", extension=".csv"):
+        """生成带时间戳的文件名"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"{prefix}_{timestamp}{extension}"
+
+    def save_paths_to_csv(self, epoch, step, paths):
+        """将路径保存到 CSV 文件中"""
+        with open(self.csv_file, mode="a", newline="") as f:  # 追加模式
+            writer = csv.writer(f)
+            for path in paths:
+                writer.writerow([epoch, step, "->".join(map(str, path))])
+
+    def find_path(self, start_node, probability, max_length, beam_size, epoch=0):
+        """一个样本寻找路径"""
+        top_beam_paths = [[start_node]]  # 概率最高的 beam_size 个路径
+        top_beam_logits = [torch.tensor(0.0).to(probability.device)]  # 每条路径的概率
+        top_beam_end = [0]  # 标记哪些路径已终止
+
+        step = 0  # 当前步数
+
         while not all(top_beam_end):
             new_paths = []
             new_logits = []
+
+            # 遍历所有 top beam 路径，扩展新路径
             for k in range(len(top_beam_paths)):
-                if top_beam_end[k]: # 已终止搜索
+                if top_beam_end[k]:  # 路径已终止，跳过
                     continue
+
                 path = top_beam_paths[k]
                 logit = top_beam_logits[k]
                 curr_node = path[-1]
-                edge = probability[curr_node] # [6]
+                edge = probability[curr_node]  # 获取当前节点的出边
 
                 next_nodes = []
                 values = []
@@ -593,47 +620,61 @@ class Walk_with_bert(nn.Module):
                     if i not in path and value > 0.0:
                         next_nodes.append(i)
                         values.append(value)
-                top_index = heapq.nlargest(min(beam_size,len(values)), range(len(values)), values.__getitem__)
-                next_nodes = [next_nodes[j] for j in top_index] 
-                values = [values[j] for j in top_index]
-                
-                new_paths += [path + [j] for j in next_nodes]
-                new_logits += [logit + torch.log(j+1e-8) for j in values]
 
-            # 把新解码得到的路径和已经终止搜索的路径合并起来
+                # 选择 top beam_size 个最优节点
+                top_index = heapq.nlargest(
+                    min(beam_size, len(values)), range(len(values)), values.__getitem__
+                )
+                next_nodes = [next_nodes[j] for j in top_index]
+                values = [values[j] for j in top_index]
+
+                # 生成新路径和概率
+                new_paths += [path + [j] for j in next_nodes]
+                new_logits += [logit + torch.log(j + 1e-8) for j in values]
+
+            # 合并新路径和已终止路径
             all_paths = []
             all_logits = []
             for index, end in enumerate(top_beam_end):
                 if end:
                     all_paths.append(top_beam_paths[index])
                     all_logits.append(top_beam_logits[index])
+
             all_paths += new_paths
             all_logits += new_logits
 
-            # 取top beam_size个
-            temp_logits = [logit/len(all_paths[index]) for index, logit in enumerate(all_logits)]
-            top_index = heapq.nlargest(min(beam_size,len(temp_logits)), range(len(temp_logits)), temp_logits.__getitem__)
-            top_beam_paths = [all_paths[j] for j in top_index] 
+            # 选择 top beam_size 个最优路径
+            temp_logits = [logit / len(all_paths[index]) for index, logit in enumerate(all_logits)]
+            top_index = heapq.nlargest(
+                min(beam_size, len(temp_logits)), range(len(temp_logits)), temp_logits.__getitem__
+            )
+            top_beam_paths = [all_paths[j] for j in top_index]
             top_beam_logits = [all_logits[j] for j in top_index]
 
-            # 判断取到的路径是否终止搜索
+            # 判断路径是否终止
             top_beam_end = []
             for i in range(len(top_beam_paths)):
                 end = 0
                 if len(top_beam_paths[i]) >= max_length:
-                    end = 1
+                    end = 1  # 达到最大长度
+
                 curr_node = top_beam_paths[i][-1]
                 edge = probability[curr_node]
-                next_nodes = []
-                for j, value in enumerate(edge):
-                    if j not in path and value > 0.0:
-                        next_nodes.append(j)
-                top_index = heapq.nlargest(min(beam_size,len(values)), range(len(values)), values.__getitem__)
-                next_nodes = [next_nodes[j] for j in top_index] 
-                if all([node in top_beam_paths[i] for node in next_nodes]) or len(next_nodes)==0:
-                    end = 1
+
+                next_nodes = [
+                    j for j, value in enumerate(edge) if j not in path and value > 0.0
+                ]
+                if not next_nodes or all(node in top_beam_paths[i] for node in next_nodes):
+                    end = 1  # 无可扩展节点时终止
+
                 top_beam_end.append(end)
-        print("top_beam_paths:", top_beam_paths)
+
+            # 保存当前 top beam paths 到 CSV
+            self.save_paths_to_csv(epoch, step, top_beam_paths)
+            step += 1  # 更新步数
+
+        print(f"top_beam_paths (saved to {self.csv_file}):", top_beam_paths)
+
         # 归一化
         top_beam_logits = [logit/len(top_beam_paths[index]) for index, logit in enumerate(top_beam_logits)]
         paths = top_beam_paths
