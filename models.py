@@ -69,7 +69,7 @@ class MultiClassFocalLossWithAlpha(nn.Module):
 # from transformers import LlamaForCausalLM,LlamaConfig
 # config = LlamaConfig.from_pretrained("/home/disk2/ghh/llama/config.json")
 #
- cvae_model = torch.load("model/graph.pkl")  # 加载预训练的 特征增强模型
+# cvae_model = torch.load("model/graph.pkl")  # 加载预训练的 特征增强模型
 
 def get_augmented_features(original_features):
     """生成增强特征，并与原始特征合并（保持相同维度）。"""
@@ -107,11 +107,11 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         _, pooled_output = self.bert(input_ids, token_type_ids=segment_ids, \
                                      attention_mask=input_mask, output_all_encoded_layers=False,)
 	# add feature
-	augmented_features = get_augmented_features(
-        batch_size=pooled_output.size(0), 
-        latent_size=pooled_output.size(-1), 
-        original_features=pooled_output
-    	)
+	# augmented_features = get_augmented_features(
+    #     batch_size=pooled_output.size(0),
+    #     latent_size=pooled_output.size(-1),
+    #     original_features=pooled_output
+    # 	)
 	
         pooled_output = pooled_output.view(-1,1+self.evi_max_num,pooled_output.shape[-1]) # [batch,6,768]
 
@@ -495,17 +495,17 @@ class Walk_with_bert(nn.Module):
             x = torch.cat([claim_batch[i].unsqueeze(0),
                            feature_batch[i]],dim=0) # [6,768]
             # 全连接
-            # edge_index = torch.arange(sent_labels[i].sum().item())
-            # edge_index = torch.cat([edge_index.unsqueeze(0).repeat(1,sent_labels[i].sum().item()),
-            #                         edge_index.unsqueeze(1).repeat(1,sent_labels[i].sum().item()).view(1,-1)],dim=0) # [2,36]
-            # edge_index1 = torch.cat([edge_index[1].unsqueeze(0),edge_index[0].unsqueeze(0)],dim=0)
-            # edge_index = torch.cat([edge_index,edge_index1],dim=1)
-            # edge_index = edge_index.to(x.device)
+            edge_index = torch.arange(sent_labels[i].sum().item())
+            edge_index = torch.cat([edge_index.unsqueeze(0).repeat(1,sent_labels[i].sum().item()),
+                                    edge_index.unsqueeze(1).repeat(1,sent_labels[i].sum().item()).view(1,-1)],dim=0) # [2,36]
+            edge_index1 = torch.cat([edge_index[1].unsqueeze(0),edge_index[0].unsqueeze(0)],dim=0)
+            edge_index = torch.cat([edge_index,edge_index1],dim=1)
+            edge_index = edge_index.to(x.device)
 
             # 只连接claim
-            num_nodes = sent_labels[i].sum().item()  # 节点数量
-            edge_index = torch.tensor([[0] * (num_nodes - 1), range(1, num_nodes)])  # 只连接第一个节点与其他节点
-            edge_index = edge_index.to(x.device)
+            # num_nodes = sent_labels[i].sum().item()  # 节点数量
+            # edge_index = torch.tensor([[0] * (num_nodes - 1), range(1, num_nodes)])  # 只连接第一个节点与其他节点
+            # edge_index = edge_index.to(x.device)
             data = Data(x=x, edge_index=edge_index)
             # data.validate(raise_on_error=True)
             datas.append(data)
@@ -633,7 +633,7 @@ class Walk_with_bert(nn.Module):
                 if all([node in top_beam_paths[i] for node in next_nodes]) or len(next_nodes)==0:
                     end = 1
                 top_beam_end.append(end)
-        # print("top_beam_paths:", top_beam_paths)
+        print("top_beam_paths:", top_beam_paths)
         # 归一化
         top_beam_logits = [logit/len(top_beam_paths[index]) for index, logit in enumerate(top_beam_logits)]
         paths = top_beam_paths
