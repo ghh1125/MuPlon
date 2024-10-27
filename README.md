@@ -32,6 +32,7 @@ pip install -r requirements.txt
 - `po3.py`: the PO3 dataset
 - `sladder.py`: sladder dataset
 - `llama_test.py`: using the LLaMA model with fever
+- `path`: save the running path of Model
 
 ## Reproduction
 
