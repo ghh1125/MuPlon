@@ -34,6 +34,10 @@ pip install -r requirements.txt
 - `llama_test.py`: using the LLaMA model with fever
 - `path`: save the running path of Model
 
+## Download Model
+
+https://drive.google.com/drive/folders/1ORZ7SjvKvmKvmpzJDRb4OydiYYs0FqZ6?usp=drive_link
+
 ## Reproduction
 
 ```
