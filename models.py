@@ -71,17 +71,10 @@ class MultiClassFocalLossWithAlpha(nn.Module):
 # from transformers import LlamaForCausalLM,LlamaConfig
 # config = LlamaConfig.from_pretrained("/home/disk2/ghh/llama/config.json")
 #
-# cvae_model = torch.load("model/graph.pkl")  # 加载预训练的 特征增强模型
 
-def get_augmented_features(original_features):
-    """生成增强特征，并与原始特征合并（保持相同维度）。"""
-    # 生成潜在向量 z
-    z = torch.randn([original_features.size(0), cvae_model.latent_size]).to(original_features.device)
-    # 使用 CVAE 生成增强特征
-    augmented_features = cvae_model.inference(z, original_features).detach()
-    # 合并增强特征与原始特征（逐元素求平均）
-    merged_features = (original_features + augmented_features) / 2
-    return merged_features  # 返回与原始特征相同维度的张量
+cvae_model = torch.load("/lgnn/generation.pkl")
+# print("Loaded cvae_model:", cvae_model)
+# print("cvae_model latent_size:", getattr(cvae_model, 'latent_size', None))
 
 
 
@@ -100,6 +93,22 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
             ELU(True),
         )
 
+    def get_augmented_features(self, original_features):
+        """生成增强特征，并与原始特征合并（保持相同维度）。"""
+        print(f"Before MLP: original_features shape: {original_features.shape}")
+        latent_size = 256
+        if original_features.size(1) != latent_size:
+            return original_features
+        z = torch.randn([original_features.size(0), latent_size]).to(original_features.device)
+        augmented_features = cvae_model.inference(z, original_features).detach()
+
+        # 打印张量的形状以进行调试
+        print(f"Original Features Shape: {original_features.shape}")
+        print(f"Augmented Features Shape: {augmented_features.shape}")
+
+        merged_features = (original_features + augmented_features) / 2
+        return merged_features  # 返回与原始特征相同维度的张量
+
 
     def cal_graph_representation(self, data):
         input_ids, input_mask, segment_ids, labels, sent_labels, evi_labels, cos = data
@@ -108,13 +117,10 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         segment_ids = segment_ids.view(-1,input_ids.shape[-1])
         _, pooled_output = self.bert(input_ids, token_type_ids=segment_ids, \
                                      attention_mask=input_mask, output_all_encoded_layers=False,)
-	# add feature
-	# augmented_features = get_augmented_features(
-    #     batch_size=pooled_output.size(0),
-    #     latent_size=pooled_output.size(-1),
-    #     original_features=pooled_output
-    # 	)
-	
+	    # add feature
+
+        augmented_features = self.get_augmented_features(pooled_output)
+        pooled_output = (pooled_output + augmented_features) / 2
         pooled_output = pooled_output.view(-1,1+self.evi_max_num,pooled_output.shape[-1]) # [batch,6,768]
 
 	    # 合并原始特征与增强特征（保持维度不变）
