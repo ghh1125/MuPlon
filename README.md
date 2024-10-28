@@ -33,6 +33,7 @@ pip install -r requirements.txt
 - `sladder.py`: sladder dataset
 - `llama_test.py`: using the LLaMA model with fever
 - `path`: save the running path of Model
+- `lgnn`: local generation feature model
 
 ## Download Model
 
