@@ -37,6 +37,7 @@ pip install -r requirements.txt
 - `po3.py`: the PO3 dataset
 - `sladder.py`: sladder dataset
 - `llama_test.py`: using the LLaMA model with fever
+- `LLM_Test.py` and `LLM_Test_two.py`: OLLAMA test
 - `path`: save the running path of Model
 - `lgnn`: local generation feature model
 
