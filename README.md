@@ -42,6 +42,10 @@ pip install -r requirements.txt
 
 https://drive.google.com/drive/folders/1ORZ7SjvKvmKvmpzJDRb4OydiYYs0FqZ6?usp=drive_link
 
+https://ollama.com/
+
+https://huggingface.co/meta-llama/Llama-2-7b-chat-hf
+
 ## Reproduction
 
 ```
