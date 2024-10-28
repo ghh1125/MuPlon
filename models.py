@@ -72,7 +72,7 @@ class MultiClassFocalLossWithAlpha(nn.Module):
 # config = LlamaConfig.from_pretrained("/home/disk2/ghh/llama/config.json")
 #
 
-cvae_model = torch.load("/lgnn/generation.pkl")
+cvae_model = torch.load("lgnn/generation.pkl")
 # print("Loaded cvae_model:", cvae_model)
 # print("cvae_model latent_size:", getattr(cvae_model, 'latent_size', None))
 
@@ -94,20 +94,13 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         )
 
     def get_augmented_features(self, original_features):
-        """生成增强特征，并与原始特征合并（保持相同维度）。"""
-        print(f"Before MLP: original_features shape: {original_features.shape}")
         latent_size = 256
         if original_features.size(1) != latent_size:
             return original_features
         z = torch.randn([original_features.size(0), latent_size]).to(original_features.device)
         augmented_features = cvae_model.inference(z, original_features).detach()
-
-        # 打印张量的形状以进行调试
-        print(f"Original Features Shape: {original_features.shape}")
-        print(f"Augmented Features Shape: {augmented_features.shape}")
-
         merged_features = (original_features + augmented_features) / 2
-        return merged_features  # 返回与原始特征相同维度的张量
+        return merged_features
 
 
     def cal_graph_representation(self, data):
@@ -118,28 +111,24 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         _, pooled_output = self.bert(input_ids, token_type_ids=segment_ids, \
                                      attention_mask=input_mask, output_all_encoded_layers=False,)
 	    # add feature
-
         augmented_features = self.get_augmented_features(pooled_output)
         pooled_output = (pooled_output + augmented_features) / 2
         pooled_output = pooled_output.view(-1,1+self.evi_max_num,pooled_output.shape[-1]) # [batch,6,768]
-
-	    # 合并原始特征与增强特征（保持维度不变）
-    	 # pooled_output = get_augmented_features(pooled_output)	
 
         datas = []
         for i in range(len(pooled_output)):
             x = pooled_output[i] # [6,768]
             # 全连接
-            # edge_index = torch.arange(sent_labels[i].sum().item())
-            # edge_index = torch.cat([edge_index.unsqueeze(0).repeat(1,sent_labels[i].sum().item()),
-            #                         edge_index.unsqueeze(1).repeat(1,sent_labels[i].sum().item()).view(1,-1)],dim=0) # [2,36]
-            # edge_index1 = torch.cat([edge_index[1].unsqueeze(0),edge_index[0].unsqueeze(0)],dim=0)
-            # edge_index = torch.cat([edge_index,edge_index1],dim=1)
-            # edge_index = edge_index.to(x.device)
-            # 只连接claim
-            num_nodes = sent_labels[i].sum().item()  # 节点数量
-            edge_index = torch.tensor([[0] * (num_nodes - 1), range(1, num_nodes)])  # 只连接第一个节点与其他节点
+            edge_index = torch.arange(sent_labels[i].sum().item())
+            edge_index = torch.cat([edge_index.unsqueeze(0).repeat(1,sent_labels[i].sum().item()),
+                                    edge_index.unsqueeze(1).repeat(1,sent_labels[i].sum().item()).view(1,-1)],dim=0) # [2,36]
+            edge_index1 = torch.cat([edge_index[1].unsqueeze(0),edge_index[0].unsqueeze(0)],dim=0)
+            edge_index = torch.cat([edge_index,edge_index1],dim=1)
             edge_index = edge_index.to(x.device)
+            # 只连接claim
+            # num_nodes = sent_labels[i].sum().item()  # 节点数量
+            # edge_index = torch.tensor([[0] * (num_nodes - 1), range(1, num_nodes)])  # 只连接第一个节点与其他节点
+            # edge_index = edge_index.to(x.device)
             data = Data(x=x, edge_index=edge_index)
             data.validate(raise_on_error=True)
             datas.append(data)
