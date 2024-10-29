@@ -75,6 +75,11 @@ class MultiClassFocalLossWithAlpha(nn.Module):
 cvae_model = torch.load("lgnn/generation.pkl")
 # print("Loaded cvae_model:", cvae_model)
 # print("cvae_model latent_size:", getattr(cvae_model, 'latent_size', None))
+import logging
+
+# 配置 logger
+logging.basicConfig(level=logging.WARNING)  # 默认只输出 WARNING 及以上级别的信息
+logger = logging.getLogger(__name__)
 
 class FeatureGenerator(nn.Module):
     def __init__(self, input_dim, hidden_dim):
@@ -113,11 +118,17 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         merged_features = (original_features + augmented_features) / 2
         return merged_features
 
-
     def cvae(self, original_features):
         latent_size = 256
-        if original_features.size(1) != latent_size:  # 过滤不一致的特征
-            return original_features
+        # 检查特征维度
+        if original_features.size(1) != latent_size:
+            means = torch.mean(original_features, dim=0)  # 均值
+            log_var = torch.log(torch.var(original_features, dim=0) + 1e-5)  # 对数方差，避免数值不稳定
+            std = torch.exp(0.5 * log_var)  # 标准差
+            epsilon = torch.randn_like(std)
+            latent_features = means + epsilon * std  # 生成潜在特征
+            return latent_features
+
         z = torch.randn([original_features.size(0), latent_size]).to(original_features.device)
         augmented_features = cvae_model.inference(z, original_features).detach()
         merged_features = (original_features + augmented_features) / 2
@@ -130,13 +141,13 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         segment_ids = segment_ids.view(-1,input_ids.shape[-1])
         _, pooled_output = self.bert(input_ids, token_type_ids=segment_ids, \
                                      attention_mask=input_mask, output_all_encoded_layers=False,)
-
+        logger.setLevel(logging.INFO)
 	    # add augmented feature
         augmented_features = self.get_augmented_features(pooled_output)
-
+        logger.info("add feature")
         # cvae
         cvae_features = self.cvae(augmented_features)
-
+        logger.info("cvae feature")
         pooled_output = (pooled_output + cvae_features) / 2
         pooled_output = pooled_output.view(-1,1+self.evi_max_num,pooled_output.shape[-1]) # [batch,6,768]
 
