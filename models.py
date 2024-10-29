@@ -76,7 +76,18 @@ cvae_model = torch.load("lgnn/generation.pkl")
 # print("Loaded cvae_model:", cvae_model)
 # print("cvae_model latent_size:", getattr(cvae_model, 'latent_size', None))
 
+class FeatureGenerator(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(FeatureGenerator, self).__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, input_dim),
+            nn.Tanh()  # 假设特征在[-1, 1]范围内
+        )
 
+    def forward(self, x):
+        return self.mlp(x)
 
 class ONE_ATTENTION_with_bert(torch.nn.Module):
     def __init__(self, nfeat, nclass, evi_max_num) -> None:
@@ -92,16 +103,25 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
             Linear(nfeat, nclass),
             ELU(True),
         )
+        self.feature_generator = FeatureGenerator(nfeat, 256)  # 定义特征生成器
 
     def get_augmented_features(self, original_features):
+        # 使用特征生成器生成增强特征
+        augmented_features = self.feature_generator(original_features)
+
+        # 合并特征
+        merged_features = (original_features + augmented_features) / 2
+        return merged_features
+
+
+    def cvae(self, original_features):
         latent_size = 256
-        if original_features.size(1) != latent_size:
+        if original_features.size(1) != latent_size:  # 过滤不一致的特征
             return original_features
         z = torch.randn([original_features.size(0), latent_size]).to(original_features.device)
         augmented_features = cvae_model.inference(z, original_features).detach()
         merged_features = (original_features + augmented_features) / 2
         return merged_features
-
 
     def cal_graph_representation(self, data):
         input_ids, input_mask, segment_ids, labels, sent_labels, evi_labels, cos = data
@@ -110,9 +130,14 @@ class ONE_ATTENTION_with_bert(torch.nn.Module):
         segment_ids = segment_ids.view(-1,input_ids.shape[-1])
         _, pooled_output = self.bert(input_ids, token_type_ids=segment_ids, \
                                      attention_mask=input_mask, output_all_encoded_layers=False,)
-	    # add feature
+
+	    # add augmented feature
         augmented_features = self.get_augmented_features(pooled_output)
-        pooled_output = (pooled_output + augmented_features) / 2
+
+        # cvae
+        cvae_features = self.cvae(augmented_features)
+
+        pooled_output = (pooled_output + cvae_features) / 2
         pooled_output = pooled_output.view(-1,1+self.evi_max_num,pooled_output.shape[-1]) # [batch,6,768]
 
         datas = []
