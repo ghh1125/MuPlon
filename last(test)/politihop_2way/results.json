@@ -3,7 +3,7 @@
  "best_accuracy": {
   "data/politihop/original/politihop_test_adv-2class.json": 0.895736842105263,
   "data/politihop/symmetric/Symmetric_PolitiHop_ShareEvi.json": 0.6136959064327485,
-  "data/politihop/symmetric/Symmetric_PolitiHop.json": 0.6497076023391813
+  "data/politihop/symmetric/Symmetric_PolitiHop.json": 0.6547076023391813
  },
  "best_step": {
   "data/politihop/original/politihop_test_adv-2class.json": 1170,
@@ -68,7 +68,7 @@
    0.6029239766081871,
    0.6058479532163742,
    0.6136959064327485,
-   06029239766081871,
+   0.6029239766081871,
    0.6029239766081871,
    0.59707602339181284,
    0.59707602339181284,
@@ -124,8 +124,8 @@
    0.6175438596491228,
    0.6,
    0.6,
-   0.6497076023391813,
-   0.6204678362573099,
+   0.6547076023391813,
+   0.6304678362573099,
    0.6146198830409356,
    0.6116959064327485,
    0.6116959064327485,
