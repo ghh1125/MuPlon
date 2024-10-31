@@ -42,9 +42,9 @@ torch.use_deterministic_algorithms(True)
 
 dir_path = Path('last(test)/politihop_2way/')
 
-train_data_path = "data/politihop/original/politihop_train_adv-2class.json"
+train_data_path = "data/politihop/symmetric/politihop_train_adv-2class.json"
 dev_file_paths = [
-    "data/politihop/original/politihop_test_adv-2class.json",
+    "data/politihop/symmetric/politihop_test_adv-2class.json",
     "data/politihop/symmetric/Symmetric_PolitiHop_ShareEvi.json",
     "data/politihop/symmetric/Symmetric_PolitiHop.json",
     ]
